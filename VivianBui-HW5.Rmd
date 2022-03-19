@@ -1,0 +1,261 @@
+---
+title: "HW5"
+author: "Vivian Bui"
+date: "9/28/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## PROBLEM 1:  
+  
+x-axis: list the different categories of household income, based on NES. NES divided the annual income of household voters (across all states) into five quantiles: 0-16, 17-33, 34-67, 68-95, and 96-100. In this study, each quantile is number as -2, -1, 0, 1, 2 respectively and correspondingly for the ease of interpreting regression (as they center around 0)  
+  
+y-axis: is the probability of voting for Republican. If the value is >0.5, meaning that the in general, the households in that specific income category supports Republican.  
+  
+Circles (or the points): each point corresponds to the probability an individual support Rep in relation to their income level. 'The open circles show the relative proportion (as compared to national averages) of households in each income category in each of the three states, and the solid circles show the average income level and estimated average support for Bush for each state.'  
+  
+The line: each line represents the trend of households' voting in a state, based on voters' income category. The slope of the line tells us how strong the relation between voting preference vs. income. The steeper the slope, the stronger the relation. As a result, 'income is a very strong predictor of vote preference in Mississippi, a weaker predictor in Ohio, and only weakly predicts vote choice at all in Connecticut.'  
+  
+Different slopes between right and left panels:  
+In Figure 3, the model only consider the relation between income vs. voting preference so that the lines representing each State only vary by income. In Figure 4, however, the calculated probability takes into the consideration of respondents' geography and income (2 vars). When taking into consideration of 2 vars, we don't require the plotted points to construct a specific linear relationship between voting preference vs. income or in other words, allows the model for varying slope. By allowing varying slope, the model reduces the deviance (as seen in 2000 vs. 2004 graph) and improved its estimation's accuracy.    
+  
+Test: Below is only the method - or pseudocode - I think of.  
+  
+Let x be the respondents' income, y is the probability voting for Republican, and z is the respondents' geography. n is the number of respondents where i is the n(th) respondent.  
+  
+Without z, our calculation for y knowing x:   
+y <- a*x + b (linear relationship)    
+  
+a, b: constants (is not provided)  
+  
+See the regression without z:    
+summary(lm(y~x))  
+  
+With z, our calculation for y:  
+y <- for (i in n){log(i)^(-1)*(alpha[z] + beta[z]*x)}  
+  
+_Formula from p.9_  
+alpha, beta: constants (is not provided)  
+  
+See the regression with z:   
+summary(lm(y~x+z))  
+  
+The second regression should return a higher R-squared value.   
+  
+## PROBLEM 2: 
+
+```{R}
+load('~/Desktop/Policy Research/HW5/fraud.RData')
+```
+
+
+#### a. To analyze the 2011 Russian election results, first compute United Russia’s vote share as a proportion of the voters who turned out. Identify the 10 most frequently occurring fractions for the vote share. Create a histogram that sets the number of bins to the number of unique fractions, with one bar created for each uniquely observed fraction, to differentiate between similar fractions like 1/2 and 51/100. This can be done by using the breaks argument in the hist function. What does this histogram look like at fractions with low numerators and denominators such as 1/2 and 2/3?  
+  
+Ans:  
+Fractions with low numerators and denominators (i.e. 1/2, 2/3, 3/4) appear with the significant higher frequency than others.  
+  
+```{R}
+#Calculate vote share
+russia2011$vote_share <- russia2011$votes/russia2011$turnout
+
+#Find frequency 
+vote_share_freq <- table(russia2011$vote_share)
+#Find 10 most frequently occuring values 
+head(sort(vote_share_freq, decreasing=TRUE), n=10)
+
+#Create histogram 
+hist(russia2011$vote_share, breaks=length(vote_share_freq), xlab="Vote Share", main="Vote Share in Russia")
+
+```
+
+#### b. The mere existence of high frequencies at low fractions may not imply election fraud. Indeed, more numbers are divisible by smaller integers like 2, 3, and 4 than by larger integers like 22, 23, and 24. To investigate the possibility that the low fractions arose by chance, assume the following probability model:
+#### • Turnout for a precinct is binomially distributed, with size equal to the number of voters in the precinct and success probability equal to its observed turnout rate.
+#### • Conduct a Monte Carlo simulation under these assumptions. 1000 simulated elections should be sufficient. (Note that this may be computationally intensive code. Write your code for a small number of simulations to test before running all 1000 simulations.)  
+  
+Ans:  
+See below.  
+  
+```{R result="hide"}
+#Turnout rate 
+russia2011$turnout_rate <- russia2011$turnout/russia2011$N
+
+#Initiate number of sims 
+sims <- 1000
+
+#Function: Simulate an election
+simulated_election <- function(dataset) {
+  #Simulate a random sample of turn out 
+  turnout_sample <- rbinom(nrow(dataset), size=dataset$N, prob=dataset$turnout_rate)
+  #Simulate a random sample of votes
+  votes_sample <- rbinom(nrow(dataset), size=turnout_sample, prob=dataset$vote_share) 
+  #Calculate the vote shares 
+  return (vote_share_sample <- votes_sample/turnout_sample)
+}
+
+#NOTE: (This is where I got the issue)
+
+#Initially, I used a for-loop for simulation
+#When using loop (like the following below code), the vote_share_sim will only 
+#return the last, or the 1000th simulated election 
+  #for (i in 1:sims) {vote_share_sim = simulated_election(russia2011)}
+#This affects our analysis in (d) and (e)
+
+#I thought of two possible solutions for using a for-loop in large simulation:
+#(1) Turn the vote_share_sim (which is the vote share of a simulated election)
+#into a vector, then create a list and store all such vectors. This method, however, 
+#is really slow because the computer takes time to both convert and append values
+#(2) Create a class for simulation with a function to generate vote share of a simulated
+#election. Then each simulated election will be an instance of the class. 
+#We then can add the instances into the list. Working with instances in a list 
+#will be less error-prone than working with vectors in a list in (1)
+
+#The book p297 shows one way to store values from large simulations. However, in the example,
+#the range of values in Obama.ev is equal the number of sims since each of its
+#value is the sum of votes in one election. We cannot apply, because in our case, 
+#we are calculating vote share, not the total number of votes which is aggregated data. 
+
+#Use a loop, regardless, will make our code for question (c) and above too complicated
+#Use replicate: which instead returns a matrix (or 2-dimensional list), 
+#where each simulation is store in a column, and rows is vector of vote share of a simulation
+vote_share_sim <- replicate(sims, simulated_election(russia2011))
+
+#Visualization (for checking outcomes)
+#Find frequency 
+#vote_share_freq_sim <- table(vote_share_sim)
+#Create histogram 
+#hist(vote_share_sim, breaks=length(vote_share_freq_sim), xlab="Vote Share", main="Vote Share in Russia")
+
+```
+
+#### c. To judge the Monte Carlo simulation results against the actual results of the 2011 Russian election, we compare the observed fraction of observations within a bin of certain size with its simulated counterpart. To do this, create histograms showing the distribution of part (b)’s four most frequently occurring fractions, i.e., 1/2, 1/3, 3/5, and 2/3, and compare them with the corresponding fractions’ proportion in the actual election. Briefly interpret the results.  
+  
+Ans:  
+The distribution of most of our observed fraction is close to the approximate value generated from Monte Carlo simulations, with the exception seen in the 3/5 fraction. Though this seems to be unusual and hints for voting manipulation, the difference observed in one fraction alone could hardly tell us anything about our analysis for whether or not fraud occur (there would be so many possible fractions that we can consider instead, not to mention the fact that the fraction of 1/2 - the one that looks to be most suspicious - turned out to have a 'natural' distribution so far).  
+  
+```{R}
+#Number of observations in each fraction
+obs_1_2 = sum(russia2011$vote_share==1/2)
+obs_1_3 = sum(russia2011$vote_share==1/3)
+obs_3_5 = sum(russia2011$vote_share==3/5)
+obs_2_3 = sum(russia2011$vote_share==2/3)
+
+#Number of observations in each fraction from simulations 
+obs_1_2_sim = apply(vote_share_sim==1/2,2,sum)
+obs_1_3_sim = apply(vote_share_sim==1/3,2,sum)
+obs_3_5_sim = apply(vote_share_sim==3/5,2,sum)
+obs_2_3_sim = apply(vote_share_sim==2/3,2,sum)
+
+#Create histogram for distribution of obs of fraction in simulation and compare
+#with that in the actual dataset 
+hist(obs_1_2_sim, xlim=c(0,400), breaks= 50, xlab='Observations in simulation', main='Observations in Actual vs. Simulated Election') 
+abline(v=obs_1_2, col = 'coral2')
+
+hist(obs_1_3_sim, xlim=c(0,400), breaks= 50, xlab='Observations in simulation', main='Observations in Actual vs. Simulated Election') 
+abline(v=obs_1_3, col = 'coral2')
+
+hist(obs_3_5_sim, xlim=c(0,400), breaks= 50, xlab='Observations in simulation', main='Observations in Actual vs. Simulated Election') 
+abline(v=obs_3_5, col = 'coral2')
+
+hist(obs_2_3_sim, xlim=c(0,400), breaks= 50, xlab='Observations in simulation', main='Observations in Actual vs. Simulated Election') 
+abline(v=obs_2_3, col = 'coral2')
+
+```
+
+#### d. We now compare the relative frequency of observed fractions with the simulated ones beyond the four fractions examined in the previous question. To do this, we choose a bin size of 0.01 and compute the proportion of observations that fall into each bin. We then examine whether or not the observed proportion falls within the 2.5 and 97.5 percentiles of the corresponding simulated proportions. Plot the result with vote share bin on the horizontal axis and estimated vote share on the vertical axis. This plot attempts to reproduce the one held by protesters in the figure. Now count the number of times an observed precinct vote share falls outside its simulated interval. Interpret the results.  
+  
+Ans:  
+There are 31 observed precint vote share falls outside its simulated interval, meaning that almost 1/3 of the actual proportion of vote share falls out the range of 'natural' proportion of vote shares. This might be a implication of manipulation in the voting behavior. However, noted that since we only compared the actual observed vs. that of simulated elections in the range between 2.5 to 97.5 percentiles, there would possibly be chances that the 31 fall-out is within the range that we fall short to cover.  
+  
+```{R}
+#Function: Get vote share and return proportion 
+bin_share = function(voteshare){
+  seql=seq(0,1,length.out=101)[-101]
+  seqh=seq(0,1,length.out=101)[-1]
+  count=c()
+  for (ii in 1:100){
+    count[ii]=length(which(voteshare>seql[ii]&voteshare<=seqh[ii]))
+  }
+  prop=count/sum(count)
+  return (prop)
+}
+
+#Find observed proportion that fall into each bin
+obs_bin = bin_share(russia2011$vote_share)
+
+#Find the vote share prop at the 2.5 and 97.5 percentiles in the simulated elections 
+sim_obs_bin <- apply(vote_share_sim, 2, bin_share)
+sim_2_5 <- apply(sim_obs_bin, 1, quantile, probs=0.025, na.rm=TRUE)
+sim_97_5 <- apply(sim_obs_bin, 1, quantile, probs=0.975, na.rm=TRUE)
+
+
+#Plot
+plot(obs_bin, xlab="Vote Share Bin", ylab="Estimated Vote Share", main="Observed Vote Share vs. Simulated Distribution")
+lines(sim_2_5, col="blue")
+lines(sim_97_5, col="blue")
+
+#Number of time an observed falls outside its simulated interval 
+sum(obs_bin < sim_2_5 | obs_bin > sim_97_5)
+```
+
+
+
+#### e. To put the results of the previous question in perspective, apply the procedure developed in the previous question to the 2011 Canadian elections and the 2003 Russian election, where no major voting irregularities were reported. In addition, apply this procedure to the 2012 Russian presidential election, where election fraud allegations were reported. No plot needs to be produced. Briefly comment on the results you obtain.  
+  
+Ans:  
+The results are similar for all three: 21 fall-out observations for canada 2011, 23 for russia 2003, and 23 for russia 2012.  
+When a fraud reported election (russia 2012) generated such similar results to a non-fraud reported ones (russia 2003), it indicates that the result we found earlier for russia 2011 might not be sufficient for the conclusion whether fraud occurs or not.  
+Simultaneously, as noted earlier in (d), there are chances that the fall-outs are actually just a result of our lack of inclusion when using the 2.5 to 97.5 percentiles to compare. This fact further complicates our interpretation for whether or not fraud exists just by basing on the fall-out.  
+  
+```{R}
+fraud_detection <- function(dataset){
+  dataset$vote_share <- dataset$votes/dataset$turnout 
+  dataset$turnout_rate <- dataset$turnout/dataset$N
+  VoteShareSim <- replicate(sims, simulated_election(dataset))
+  ObsBin <- bin_share(dataset$vote_share)
+  SimObsBin <- apply(VoteShareSim, 2, bin_share)
+  Sim25 <- apply(SimObsBin, 1, quantile, probs=0.025, na.rm=TRUE)
+  Sim975 <- apply(SimObsBin, 1, quantile, probs=0.975, na.rm=TRUE)
+  return (sum(ObsBin < Sim25 | ObsBin > Sim975))
+}
+
+#No fraud: Canada and Russia 2003
+fraud_detection(canada2011)
+fraud_detection(russia2003)
+
+#Fraud: Russia 2012
+fraud_detection(russia2012)
+
+```
+
+## PROBLEM 3: 
+
+```{R result="hide"}
+#Simulate and generate random var
+sims<-1000
+x <- runif(sims, min=1, max=1111)
+y <- runif(sims, min=0, max=99999)
+z <- runif(sims, min=0, max=100)
+
+#Add var to a table
+data <- list(x,y,z)
+as.data.frame(data)
+
+```
+
+```{R}
+#View regression relation
+#between y and x
+summary(lm(formula = y~x, data=data))
+#between y and x (adjusted for coufounding z)
+summary(lm(formula = y~x+z, data=data))
+```
+
+
+
+
+
+
+
