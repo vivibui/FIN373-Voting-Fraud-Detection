@@ -1,0 +1,320 @@
+---
+title: "HW6"
+author: "Vivian Bui"
+date: "10/3/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{R}
+justice_df <- read.csv('https://raw.githubusercontent.com/dpuelz/Policy-Research-Laboratory/main/data/justices.csv')
+momwage_df <- read.csv('https://raw.githubusercontent.com/dpuelz/Policy-Research-Laboratory/main/data/yu2017sample.csv')
+```
+
+
+## PROBLEM 1:  
+  
+#### a. We wish to know the median ideal point for the Court during each term included in the dataset. First, calculate the median ideal point for each term of the Court. Next, generate a plot with term on the horizontal axis and ideal point on the vertical axis. Include a dashed horizontal line at zero to indicate a “neutral” ideal point. Be sure to include informative axis labels and a plot title.  
+  
+Ans:  
+  
+```{R}
+#Find list of terms
+terms <- unique(justice_df$term)
+
+#Initiate 
+median_point <- c()
+loop=0
+
+#Loop to find median ideal pts by term
+for (term in terms) 
+  {
+  loop=loop+1
+  ideal_pt = justice_df$idealpt[justice_df$term == term]
+  median_point[loop] <- median(ideal_pt)
+  }
+
+#Plot
+plot(x=terms,y=median_point, main='Median Ideal Points by Term', xlab='Term', ylab='Median Point')
+abline(h=0, col='blue', lty=2)
+
+```
+
+#### b. Next, we wish to identify the name of the justice with the median ideal point for each term. Which justice had the median ideal point in the most (potentially nonconsecutive) terms? How long did this justice serve on the Court overall? What was this justice’s average ideal point over his/her entire tenure on the Court?  
+  
+Ans:  
+  
+See below.  
+  
+```{R}
+#Initiate 
+name <- c()
+loop2 = 0
+
+#Loop to find list of justice names
+for (point in median_point) 
+  {
+  loop2=loop2+1
+  year = terms[loop2]
+  name[loop2] <- justice_df$justice[justice_df$idealpt==point & justice_df$term==year]
+  }
+
+#Justice had the median ideal point in the most terms
+name_freq <- as.data.frame(table(name))
+name_max <- as.character(name_freq$name[name_freq$Freq == max(name_freq$Freq)])
+print(name_max)
+
+#Serving time 
+serving_terms <- justice_df$term[justice_df$justice==name_max]
+serving_year = length(serving_terms)
+print(serving_year)
+
+#Initiate 
+sum=0
+
+#Find sum of ideal point of justice White throughout his terms 
+for (year in serving_terms) 
+  {
+  justice_idealpt = subset(justice_df, justice_df$term == year & justice_df$justice == name_max, select=c(idealpt))
+  sum=sum+justice_idealpt 
+  }
+
+#Average ideal point of justice White throughout his terms
+avg = sum/serving_year
+print(avg)
+
+```
+
+#### c. We now turn to the relationship between Supreme Court ideology and the president. Specifically, we want to see how the ideology of the Supreme Court changes over the course of each presi- dent’s time in office. Begin by creating two empty “container” vectors: one to hold Democratic presidents, and another for Republican presidents. Label each vector with the presidents’ names.  
+  
+Ans:  
+  
+```{R}
+#Create empty vectors
+dem_president <- c() 
+rep_president <- c() 
+
+#Label dem vector
+dem_president = as.factor(unique(justice_df$pres[justice_df$pparty=='D']))
+dem_president =  factor(1:5, labels =  unique(justice_df$pres[justice_df$pparty=='D']))
+
+#Label rep vector
+rep_president = as.factor(unique(justice_df$pres[justice_df$pparty=='R']))
+rep_president = factor(1:6, labels = unique(justice_df$pres[justice_df$pparty=='R']))
+
+```
+  
+#### d. Next, for each Democratic president, calculate the shift in Supreme Court ideology by subtracting the Court’s median ideal point in the president’s first term from its median ideal point in the president’s last term. Use a loop to store these values in your Democratic container vector. Repeat the same process for Republican presidents.  
+  
+Ans:  
+  
+```{R}
+
+#Function: calculate the shift point for each president in each party
+calc_shift <- function(president_party)
+  {
+    for (president in president_party) 
+    {
+    pres_term = unique(justice_df$term[justice_df$pres == president])
+    first_term = pres_term[1] 
+    last_term = pres_term[length(pres_term)]
+    medpt_first = median(justice_df$idealpt[justice_df$term == first_term])
+    medpt_last = median(justice_df$idealpt[justice_df$term == last_term])
+    return (pres_shift = medpt_first - medpt_last)
+    }
+  }
+
+#Apply the function
+dem_df <- as.data.frame(tapply(dem_president, dem_president, calc_shift))
+rep_df <- as.data.frame(tapply(rep_president, rep_president, calc_shift))
+
+#Set name for df columns
+dem_df <- setNames(cbind(rownames(dem_df), dem_df, row.names = NULL), c("pres", "shift_pt"))
+rep_df <- setNames(cbind(rownames(rep_df), rep_df, row.names = NULL), c("pres", "shift_pt"))
+
+#Output 
+print(dem_df)
+print(rep_df)
+```
+
+#### e. What was the mean and standard deviation of the Supreme Court ideology shifts you just calculated when looking only at the Democratic presidencies? What about the Republican presidencies? Which Republican president’s tenure had the largest conservative (positive) shift on the Court? Which Democratic president’s tenure had the largest liberal (negative) shift?  
+  
+Ans:  
+  
+See below.  
+  
+```{R}
+#Mean and sd for D pres
+mean(dem_df$shift_pt)
+sd(dem_df$shift_pt)
+
+#Mean and sd for R pres
+mean(rep_df$shift_pt)
+sd(rep_df$shift_pt)
+
+#Republican president with the largest shift 
+rep_df$pres[rep_df$shift_pt == max(rep_df$shift_pt)]
+
+#Democratic president with the largest shift 
+dem_df$pres[dem_df$shift_pt == min(dem_df$shift_pt)]
+
+```
+
+#### f. Create a plot that shows the median Supreme Court ideal point over time. Then, add lines for the ideal points of each unique justice to the same plot. The color of each line should be red if the justice was appointed by a Republican and blue if he or she was appointed by a Democrat. (You can assume that when a Justice first appears in the data, they were appointed by the president sitting during that term.) Label each line with the justice’s last name. Briefly comment on the resulting plot.  
+  
+Ans:  
+  
+Turns out that the ideal point does not necessarily means a judge's preference towards one specific party. A high, and positive median pt can still affiliate with Democrat rather than what we initially assumed as Republican. Nonetheless, the highest positive median pt instead tied to the Democrats. One thing that we are more confident to claim is that the majority of median pts which are negative will be more likely pointed towards a preference for the blue party. Other than that, the median pts in general is not a substantial and adequate indication of party preference.  
+  
+```{R}
+#Initiate
+loop3=0
+
+#Plot the Supreme Court median ideal point over time 
+plot(x=terms,y=median_point, main='Median Ideal Points by Term', xlab='Term', ylab='Median Point')
+
+#Draw line for each justice 
+for (i in 1:length(terms)) {
+  loop3=loop3+1
+  x = terms[loop3] 
+  jt_name = name[loop3]
+  jt_party = justice_df$pparty[justice_df$term == x & justice_df$justice == jt_name]
+  if (jt_party == 'D') 
+    {
+    abline(v=x, col='Blue')
+    text(x=x, y=1, srt=90, cex = 0.5, labels = jt_name)
+    }
+  else 
+  { abline(v=x, col='Red')
+      text(x=x, y=1, srt=90, cex = 0.5, labels = jt_name)}}
+
+```
+
+## PROBLEM 2:  
+  
+#### a. How many different women are in the data? How many observations per year? We will refer to each row as a “person-year observation” since the row contains data on a given person in a particular year. In a few sentences, describe one advantage and one disadvantage of using a contemporary cohort of women rather than an older cohort in estimating the predictors of the mother wage gap.  
+  
+Ans:  
+  
+Advantage: At the start of the contemporary cohort, we can be ascertain that the participants 'start fresh' (i.e. has not expose to any studying variables), thus, we can observe the effects of exposure and improve our analysis pf outcomes based on collected data of contemporary cohort.  
+Disadvantage: Certain exposures take time to develop observable outcomes, thus, using contemporary cohort rather than the older one will potentially increase the risk of losing valuable data. Additionally, there are occasions where we want to study the aggregated effect of exposures, which can only be observed on a substantially same cohort over time. 
+  
+```{R}
+
+#Different women in the data
+length(unique(momwage_df$PUBID))
+
+#Observations per year
+years <- unique(momwage_df$year)
+for (year in years) {print(sum(momwage_df$year == year))}
+
+```
+#### b. numChildren is the variable representing how many children the woman had at the time of an observation. Please provide a table that shows the proportion of observations by the number of children. Provide a brief substantive interpretation of the results.  
+  
+Ans:  
+  
+More than 60% of female participants do not have children, and 19% to 12% of participants have one to two children. Less than 0.3% of women in the study have 6 children, and 6 is the maximum number of children the women in this study have.  
+This, however, indicates the possibility for sample selection bias that potentially affects our analysis for the mom wage gap.  
+  
+```{R}
+prop.table(table(momwage_df$numChildren))
+
+```
+
+#### c. Create a new indicator variable isMother that takes a value of 1 if the woman has at least one child in that year and a value of 0 otherwise. Tabulate the new variable. Briefly comment on the results.  
+  
+Ans:  
+  
+In the studying sample, only 4346 or less than 38% of the studying women are mothers. As previously mentioned, this may affect our analysis for the mom wage gap. 
+  
+```{R}
+momwage_df$isMother <- ifelse(momwage_df$numChildren != 0, 1, 0)
+tabulate(momwage_df$isMother)
+
+```
+
+#### d. Create a new variable called logwage that is the log of wage. Make two boxplots, one for wage and the other for logwage, as a function of educational level (educ). Compare the two boxplots and discuss the purpose of the log transformation.  
+  
+Ans:  
+  
+The log transformation helps remove skewness that greatly enhance our visibility and analysis on the plots.  
+  
+```{R}
+#Creat logwage
+momwage_df$logwage <- log(momwage_df$wage)
+
+#Boxplots 
+boxplot(wage~educ, data=momwage_df, 
+        main = 'Wage by Educational Levels', 
+        xlab = 'Education Levels',
+        ylab = 'Wage')
+boxplot(logwage~educ, data=momwage_df,
+        main = 'Log Wage by Educational Levels',
+        xlab = 'Education Levels',
+        ylab = 'Log Wage')
+
+```
+
+#### e. In the same graph, plot the mean logwage against year for mothers, then for non-mothers in a different color or line type. Include a legend and a proper title. Make sure the figure and axes are clearly labeled. Give a brief interpretation of the results.  
+  
+Ans:  
+  
+Overall, regardless of having children or not, women will make more money if having some college or higher. Though not significant, calculated results show that the mean wage for mothers is higher than the mean wage for non-mothers. However, noted that our sample has more than 60% are non-mothers, this difference between the two mean wage may not be applicable in the population.  
+  
+```{R}
+#Mean logwage for mothers
+logwage_isMother = momwage_df$logwage[momwage_df$isMother==1]
+mean_logwage_isMother = mean(logwage_isMother)
+
+#Mean logwage for non-mothers 
+logwage_nonMother = momwage_df$logwage[momwage_df$isMother==0]
+mean_logwage_nonMother = mean(logwage_nonMother)
+
+#Plot
+boxplot(logwage~educ, data=momwage_df,
+        main = 'Log Wage by Educational Levels',
+        xlab = 'Education Levels',
+        ylab = 'Log Wage')
+abline(h=mean_logwage_isMother, col='blue')
+abline(h=mean_logwage_nonMother, col='red')
+legend(3, 4, legend=c("Mean Logwage for mothers", "Mean Logwage for non-mothers"),
+       col=c("blue", "red"), lty=1:1, cex=0.7)
+
+```
+
+#### f. Run a regression using fixed effects for both woman and year. You should be sure to include variables for number of children (numChildren) and job characteristics (fullTime, firmSize, multipleLocations, unionized, industry). Note: that you should not use the isMother variable you created earlier in this model. Report the coefficient of numChildren. Provide a brief substantive interpretation of this coefficient and the coefficients for any two other variables. (Hint: fixed effects means including the relevant factor variables in the regression model – see the bolded statement in the problem introduction).  
+  
+Ans:  
+  
+The coefficient of numChildren is 303.726. This means that, on average per woman, having an additional child gives a women 303.726 positive cashflow in wage (child support, perhaps?).  
+Other vars such as full-time status, company's geography, union labor, etc., when being TRUE, will be more likely to have a positive effect on the women's wage. The effect of industries on wage, however, varies depend on the type of industries.  
+  
+```{R}
+
+install.packages("plm", repos = "http://cran.us.r-project.org")
+library(plm)
+
+plm(wage ~ numChildren 
+    + fullTime 
+    + multipleLocations 
+    + unionized 
+    + industry, data=momwage_df, 
+    index=c("PUBID", "year"), 
+    model="within")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

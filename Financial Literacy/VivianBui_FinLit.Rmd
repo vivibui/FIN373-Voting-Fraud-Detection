@@ -1,0 +1,245 @@
+---
+title: "Financial Literacy"
+author: "Vivian Bui"
+date: "10/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{R}
+#Load datasets
+finlit <- read.csv('https://raw.githubusercontent.com/dpuelz/Policy-Research-Laboratory/main/data/finlit15and18.csv')
+transfer <- read.csv('https://raw.githubusercontent.com/dpuelz/Policy-Research-Laboratory/main/data/transfer.csv')
+
+#Load ggplot 
+library(ggplot2)
+
+#Load boot and mosaic
+install.packages("mosaic", repos = "http://cran.us.r-project.org")
+library(mosaic)
+library(boot)
+
+```
+
+## PROBLEM 1:  
+
+#### a. First, how many observations are in the data? Second, describe the survey respondents across some of the variables. What is the gender and age breakdown? What is the distribution of respondents across household income (remember that household income, although coded numer- ically, is a categorical variable. Be sure to reference the codebook for category descriptions)?  
+  
+Ans:  
+There are 4694 observations in total. 
+Gender: 1 for Male, 2 for Female.  
+Age: Values from 13 to 100 corresponds to the participants' age. The input of 101 means a participant of 101 age and older. The input of 999 means the participant refuses to declare.  
+Distribution of household income: left-skewed. This means that if we later want to examine the central location of this distribution and analyze the behavior of the majority of households across income brackets, the median would be more approriate than the mean.   
+  
+```{R}
+#Number of observations
+dim(finlit)
+
+#Turn A8 into factor 
+finlit$A8_factor <- NA
+finlit$A8_factor[finlit$A8==1] <- "<15000"
+finlit$A8_factor[finlit$A8==2] <- "15000 to <25000"
+finlit$A8_factor[finlit$A8==3] <- "25000 to <35000"
+finlit$A8_factor[finlit$A8==4] <- "35000 to <50000"
+finlit$A8_factor[finlit$A8==5] <- "50000 to <75000"
+finlit$A8_factor[finlit$A8==6] <- "75000 to <100000"
+finlit$A8_factor[finlit$A8==7] <- "100000 to <150000"
+finlit$A8_factor[finlit$A8==8] <- ">=150000"
+finlit$A8_factor[finlit$A8==98] <- "Don't know"
+finlit$A8_factor[finlit$A8==99] <- "Prefer not to say"
+
+finlit$A8_factor <-factor(finlit$A8_factor, order=TRUE, levels=c("<15000","15000 to <25000","25000 to <35000","35000 to <50000","50000 to <75000","75000 to <100000","100000 to <150000",">=150000","Don't know","Prefer not to say"))
+
+#Graph 
+ggplot(data = finlit, aes(A8_factor)) + geom_bar() +labs(x="Household Income Categories", y="Count") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+#### b. Compute the average literacy difference between females and males. Is this significantly different from zero (use the bootstrap to characterize the sampling distribution of this difference)? Provide a 95% confidence interval around the estimate of this difference. Treating J2 as a numerical variable, conduct the same analysis for the average difference in J2 between genders. What conclusions do you draw from these results?  
+  
+Ans:  
+J2 = willingness to take risks.  
+The shape of the distribution for both results are relatively similar. This means that there is not so many substantial financial literacy difference considering a participant's willingness to take risks or the participant's gender. 
+  
+```{R}
+
+#Function for bootstrap 
+mean_diff_gender <- function(x)
+  {
+  n=with(finlit,by(x,A3,length))
+  
+  #Bootstrap (manually)
+  rep=1000
+  
+  #Samples of female and male
+  female_samples = with(finlit, matrix(sample(x[A3=="2"], size = n[2] * rep, replace = TRUE), rep, n[2]))
+  male_samples = with(finlit, matrix(sample(x[A3=="1"], size = n[1] * rep, replace = TRUE), rep, n[1]))
+  female_means = apply(female_samples, 1, mean)
+  male_means = apply(male_samples, 1, mean)
+  diff_mean = male_means - female_means 
+  
+  #Confidence interval of 95%
+  confint(diff_mean, level=0.95)
+  
+  #Graph 
+  ggplot(data.frame(x = diff_mean), aes(x=x)) + geom_histogram()
+  
+}
+
+#Mean different in gender  
+mean_diff_gender(finlit$literacy)
+mean_diff_gender(finlit$J2)
+
+```
+
+#### c. Fit a simple linear regression model of literacy on gender (A3). Report the coefficient and standard error on the gender variable. Run a bootstrap of this coefficient to characterize the sampling distribution. How does the standard deviation of the sampling distribution compare to the standard error from the regression output? How does the coefficient and sampling distribution spread compare to the results from the first part of (b)? Remember that in order to regress an outcome Y on a factor variable X (binary or categorical), you need to specify that the covariate is a factor in R. The R code to do this is: fit = lm(Y ∼ factor(X)).  
+  
+Ans:  
+  
+```{R}
+#Model
+summary(lm(data=finlit, formula=literacy~factor(A3)))
+
+#Bootstrap for standard error
+boot1 = do(1000)*{mean(resample(finlit)$A3)}
+hist(boot1$result, 30)
+sd(boot1$result)
+
+```
+
+#### d. Investigate the effect of financial literacy on perceived economic condition. One approach is to start with relatively small regression models (with a couple variables) and move to a large model with all 12 variables listed above. How well do your models describe the variation in perceived economic condition? Does the literacy effect change across models? If so, how and why?  
+  
+Ans:  
+  
+```{R}
+#Simple model
+summary(lm(data=finlit, formula=literacy~Y))
+
+#Added age (A3A), household income (A8), and level of education (A5_2015)
+summary(lm(data=finlit, formula=
+             literacy ~ Y + A3A + factor(A8) + factor(A5_2015)))
+
+#Added all 
+summary(lm(data=finlit, formula = literacy ~ 
+             Y + #perceived economic condition (numerical)
+             factor(A5_2015) + #level of education 
+             A3A + #age
+             factor(J2) + #willingness to take risks
+             factor(A3) + #gender
+             factor(A8) + #household income (categories)
+             #factor(E15) + 
+             #times of late mortgage payment (categories) - does not have in df
+             factor(E20) + #whether mortgage owning is more than its worth
+             factor(F2_2) + #whether have balance and is charged interest
+             factor(F2_3) + #whether paid minimum 
+             factor(F2_4) + #whether have late fee
+             factor(F2_5) + #whether was charged overdraft 
+             factor(F2_6) )) #whether cash out 
+            
+                              
+```
+  
+## PROBLEM 2:  
+  
+#### a. Begin by creating a variable that determines how close each municipality was to the cutoff that determined whether states received a transfer or not. Transfers occurred at three separate population cutoffs: 10,188, 13,584, and 16,980. Using these cutoffs, create a single variable that characterizes the difference from the closest population cutoff. Following the original analysis, standardize this measure by dividing the difference with the corresponding cutoff and multiply it by 100. This will yield a normalized percent score for the difference between the population of each state and the cutoff relative to the cutoff value.  
+  
+Ans:  
+  
+```{R}
+#Find the midpoint between each cutoff 
+mid1 = 10188 + (13584-10188)/2
+mid2 = 13584 + (16980-13584)/2
+
+#Find normaliezd percent score
+transfer$pscore <- ifelse(transfer$pop82 <= mid1, (transfer$pop82 - 10188)/10188,
+                    ifelse(transfer$pop82 <= mid2, (transfer$pop82 - 13584)/13584, (transfer$pop82 - 16980)/16980))*100 
+
+```
+
+#### b.  Subset the data to include only those municipalities within 3 points of the funding cutoff on either side. Using regressions, estimate the average causal effect of government transfer on each of the three outcome variables of interest: educational attainment, literacy, and poverty. Give a brief substantive interpretation of the results.  
+  
+Ans:  
+Though not very significant, the result suggests that the government transfer does increase educational attainment by 0.55 years, increase literacy by 5 percent, and reduce poverty rate by 0.06 percent.  
+  
+```{R}
+#Subset data for municipalities within 3 points of funding cutoff 
+fit1 <- subset(transfer, (transfer$pscore>=-3) & (transfer$pscore<=0))
+fit2 <- subset(transfer, (transfer$pscore>=0) & (transfer$pscore<=3))
+
+#Regressions
+#Effect on educational attainment 
+educ.fit1 <- lm(data=fit1, educ91~pscore)
+educ.fit2 <- lm(data=fit2, educ91~pscore)
+coef(educ.fit2) - coef(educ.fit1)
+
+#Effect on literacy
+lit.fit1 <- lm(data=fit1, literate91~pscore)
+lit.fit2 <- lm(data=fit2, literate91~pscore)
+coef(lit.fit2) - coef(lit.fit1)
+
+#Effect on poverty 
+pov.fit1 <- lm(data=fit1, poverty91~pscore)
+pov.fit2 <- lm(data=fit2, poverty91~pscore)
+coef(pov.fit2) - coef(pov.fit1)
+
+```
+#### c. Visualize the analysis done in the previous question by plotting data points, fitted regression lines, and the population threshold. Briefly comment on the plot.  
+  
+Ans:  
+The left hand-side of the fitted regression model for literacy and educational attainment is lower than the predicted value on the right side, while the opposite pattern is observed in the poverty rate. This result suggests that government transfer yields a positive effect on the studying variables since the shows an increase in educational attainment, literacy, and decrease in poverty rate.  
+  
+```{R}
+#Subset data that within population threshold
+fit_pop <- subset(transfer, transfer$pscore>=-3 & transfer$pscore<=3)
+
+graph_data <- function(column, subset1, subset2, name_x, name_y, name_main)
+  {
+    #y range
+    y1.range <- c(-3,0)
+    y2.range <- c(0,3)
+    
+    #Graph
+    plot(fit_pop$pscore, column, xlab=name_x, ylab=name_y,main=name_main)
+    abline(v=0, col="red")
+    
+    #Predict outcomes 
+    outcome1 <- predict(subset1, newdata=data.frame(pscore=y1.range))
+    outcome2 <- predict(subset2, newdata=data.frame(pscore=y2.range))
+    
+    #Add regression lines
+    lines(y1.range, outcome1, col='blue')
+    lines(y2.range, outcome2, col='blue')
+}
+
+#Education
+graph_data(fit_pop$educ91, educ.fit1, educ.fit2, 'Distance to Population Cutoff', 'Average Years of Attending School', 'Educational Attainment')
+
+#Literacy 
+graph_data(fit_pop$literate91, lit.fit1, lit.fit2, 'Distance to Population Cutoff', 'Literacy Rate', 'Literacy Rate')
+
+#Poverty 
+graph_data(fit_pop$poverty91, pov.fit1, pov.fit2, 'Distance to Population Cutoff', 'Poverty Rate', 'Poverty Rate')
+
+```
+
+#### d. Instead of fitting linear regression models, we compute the difference in means of the outcome variables between the groups of observations above the threshold and below it. How do the estimates differ from what you obtained in the earlier question? Describe the assumptions for both approaches and how they differ. Which estimates are more appropriate? Please discuss.  
+  
+Ans:  
+The difference between the DiM method with what is done above is due to the fact that DiM makes an assumption that the regression line is flat (which is not). However, though there is difference between the two approaches, they still yield similar conclusion as the sign we calculated in DiM and the trend of the righ-hand side of our fitted regression model are similar.  
+  
+```{R}
+mean(fit2$educ91) - mean(fit1$educ91)
+mean(fit2$literate91) - mean(fit1$literate91)
+mean(fit2$poverty91) - mean(fit1$poverty91)
+
+```
+
+
+
+
+
+
+
