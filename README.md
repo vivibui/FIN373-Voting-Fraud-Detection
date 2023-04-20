@@ -1,4 +1,4 @@
-# FIN373-Policy-Research
+# Policy-Research
 
 Includes: 
 
